@@ -22,26 +22,49 @@
  
 
 import dbus
-import rb
+import rb, rhythmdb
 
 class IMStatus (rb.Plugin):
     def __init__ (self):
         rb.Plugin.__init__ (self)
+        # TODO: adicionar diálogo para configuração e colocar entradas no gconf
+        #       (usuário seleciona as entradas que quiser como status)
+        # TODO: adicionar suporte a mais programas (aMSN, Gaim?, Gajim)
         
     def activate(self, shell):
         obj = dbus.SessionBus ().get_object ('im.pidgin.purple.PurpleService', '/im/pidgin/purple/PurpleObject')
-        self.im_instance = Pidgin (interface)
-        im_accounts = im_instance.listAccounts ()
+        self.interface = dbus.Interface (obj, 'im.pidgin.purple.PurpleInterface')
+        
         #olhar esses eventos
         player = shell.get_player ()
         self.psc_id = player.connect ('playing-song-changed', self.playing_song_changed)
         self.pc_id = player.connect ('playing-changed', self.playing_changed)
-    #obtido do plugin de artcover
+    
+    # obtido do plugin de artcover
     def playing_changed (self, player, playing):
         pass
 
     def playing_song_changed (self, player, entry):
-        pass
+        # Get current track information
+        db = player.props.db
+        title = db.entry_get (entry, rhythmdb.PROP_TITLE)
+        album = db.entry_get (entry, rhythmdb.PROP_ALBUM)
+        artist = db.entry_get (entry, rhythmdb.PROP_ARTIST)
+        year = str ( db.entry_get (entry, rhythmdb.PROP_YEAR) )
+        
+        message = '♫ ' + artist + ' - ' + title + ' ♫'
+        
+        # Set status message
+        self.set_status_message(message)
+        
+    def set_status_message (self, message):
+        # Get current status type (Available/Away/etc.)
+        current = self.interface.PurpleSavedstatusGetType \
+                    (self.interface.PurpleSavedstatusGetCurrent () )
+        # Create new transient status and activate it
+        status = self.interface.PurpleSavedstatusNew ("", current)
+        self.interface.PurpleSavedstatusSetMessage (status, message)
+        self.interface.PurpleSavedstatusActivate (status)
         
  ## informações obtidas a partir da função help()
  #~ |      Signals from RBShellPlayer:
@@ -83,41 +106,9 @@ class IMStatus (rb.Plugin):
         player = shell.get_player()
         player.disconnect(self.psc_id)
         player.disconnect(self.pc_id)
-    
-
-
-class Pidgin :
-
-    def __init__(self, dbusInterface) :
-        """
-            Constructor
-        """
-        self.dbusInterface = dbusInterface
-
-    def listAccounts(self) :
-        """
-            Purple merges all accounts, so we return a default one
-            Each account is associated with:
-                * A boolean -> True if the status of this account was changed on the previous track change
-        """
-        return {'GenericAccount' : False}
-
-    def setAccountStatusMsg(self, account, msg) :
-        """
-            Change the status message of the given account
-            Why is it so complex with Purple??
-            Return true if the message is successfully updated
-        """
-        try :
-            current    = self.dbusInterface.PurpleSavedstatusGetCurrent()
-            statusType = self.dbusInterface.PurpleSavedstatusGetType(current)
-            statusId   = self.dbusInterface.PurplePrimitiveGetIdFromType(statusType)
-            if statusId in ['available'] :
-                saved = self.dbusInterface.PurpleSavedstatusNew('', statusType)
-                self.dbusInterface.PurpleSavedstatusSetMessage(saved, msg)
-                self.dbusInterface.PurpleSavedstatusActivate(saved)
-                return True
-        except :
-            pass
-        return False
-
+        
+        del self.psc_id
+        del self.pc_id
+        
+        del self.interface
+        
