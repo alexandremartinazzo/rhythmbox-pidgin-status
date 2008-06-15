@@ -1,0 +1,10 @@
+[RB Plugin]
+Loader=python
+Module=imstatus
+IAge=1
+Name=Pidgin status
+Description=Show current track in Pidgin status
+Description[pt_BR]=Mostra a faixa atual como status do Pidgin
+Authors=Alexandre Antonino Gonçalves Martinazzo  <alexandremartinazzo@gmail.com>
+Copyright=Copyright © 2008 Alexandre Antonino Gonçalves Martinazzo
+Website=http://alemartinazzo.blogspot.com/
