@@ -25,32 +25,44 @@ import dbus
 import rb, rhythmdb
 
 class IMStatus (rb.Plugin):
+
     def __init__ (self):
         rb.Plugin.__init__ (self)
         # TODO: adicionar diálogo para configuração e colocar entradas no gconf
         #       (usuário seleciona as entradas que quiser como status)
         # TODO: adicionar suporte a mais programas (aMSN, Gaim?, Gajim)
         
-    def activate(self, shell):
+        self.old_message = None
+        
+    def activate (self, shell):
         obj = dbus.SessionBus ().get_object ('im.pidgin.purple.PurpleService', '/im/pidgin/purple/PurpleObject')
         self.interface = dbus.Interface (obj, 'im.pidgin.purple.PurpleInterface')
         
-        #olhar esses eventos
+        # TODO: salvar status de antes da ativação do plugin
+        old = self.interface.PurpleSavedstatusGetCurrent ()
+        self.old_message = self.interface.PurpleSavedstatusGetMessage (old).strip ()
+                
         player = shell.get_player ()
         self.psc_id = player.connect ('playing-song-changed', self.playing_song_changed)
         self.pc_id = player.connect ('playing-changed', self.playing_changed)
+
+        # Changing Pidgin status
+        title, album, artist, year = self.get_current_track_info (player)
+        message = '♫ ' + artist + ' - ' + title + ' ♫'
+        self.set_status_message (message)
+
     
-    # obtido do plugin de artcover
     def playing_changed (self, player, playing):
-        pass
+        if playing:
+            title, album, artist, year = self.get_current_track_info (player)
+            message = '♫ ' + artist + ' - ' + title + ' ♫'
+            self.set_status_message (message)
+        else:
+            self.set_status_message (self.old_message)
 
     def playing_song_changed (self, player, entry):
         # Get current track information
-        db = player.props.db
-        title = db.entry_get (entry, rhythmdb.PROP_TITLE)
-        album = db.entry_get (entry, rhythmdb.PROP_ALBUM)
-        artist = db.entry_get (entry, rhythmdb.PROP_ARTIST)
-        year = str ( db.entry_get (entry, rhythmdb.PROP_YEAR) )
+        title, album, artist, year = self.get_current_track_info (player)
         
         message = '♫ ' + artist + ' - ' + title + ' ♫'
         
@@ -58,13 +70,32 @@ class IMStatus (rb.Plugin):
         self.set_status_message(message)
         
     def set_status_message (self, message):
+        if not message:
+            message = ''
+
         # Get current status type (Available/Away/etc.)
         current = self.interface.PurpleSavedstatusGetType \
                     (self.interface.PurpleSavedstatusGetCurrent () )
-        # Create new transient status and activate it
-        status = self.interface.PurpleSavedstatusNew ("", current)
-        self.interface.PurpleSavedstatusSetMessage (status, message)
-        self.interface.PurpleSavedstatusActivate (status)
+        
+        # Change status only if available
+        id = self.interface.PurplePrimitiveGetIdFromType (current)
+        
+        if id in 'available':
+            # Create new transient status and activate it
+            status = self.interface.PurpleSavedstatusNew ("", current)
+            self.interface.PurpleSavedstatusSetMessage (status, message)
+            self.interface.PurpleSavedstatusActivate (status)
+
+    def get_current_track_info (self, player):
+        entry = player.get_playing_entry ()
+        db = player.props.db
+
+        title = db.entry_get (entry, rhythmdb.PROP_TITLE)
+        album = db.entry_get (entry, rhythmdb.PROP_ALBUM)
+        artist = db.entry_get (entry, rhythmdb.PROP_ARTIST)
+        year = str (db.entry_get (entry, rhythmdb.PROP_YEAR))
+
+        return title, album, artist, year
         
  ## informações obtidas a partir da função help()
  #~ |      Signals from RBShellPlayer:
@@ -103,6 +134,9 @@ class IMStatus (rb.Plugin):
  #~ |      RBPlayer object
  
     def deactivate(self, shell):
+        # Restore the old message
+        self.set_status_message (self.old_message)
+
         player = shell.get_player()
         player.disconnect(self.psc_id)
         player.disconnect(self.pc_id)
@@ -111,4 +145,4 @@ class IMStatus (rb.Plugin):
         del self.pc_id
         
         del self.interface
-        
+
