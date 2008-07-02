@@ -19,7 +19,7 @@
 #~ along with this program; if not, write to the Free Software
 #~ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #~ MA 02110-1301, USA.
- 
+
 
 import dbus
 import rb, rhythmdb
@@ -28,31 +28,48 @@ class IMStatus (rb.Plugin):
 
     def __init__ (self):
         rb.Plugin.__init__ (self)
-        # TODO: adicionar diálogo para configuração e colocar entradas no gconf
-        #       (usuário seleciona as entradas que quiser como status)
+        # TODO: adicionar diálogo para configuração e colocar entradas no gconf (usuário seleciona as entradas que quiser como status)
         # TODO: adicionar suporte a mais programas (aMSN, Gaim?, Gajim)
-        
+        # TODO: conectar aos sinais de mudança de status do Pidgin (como 'ocupado' para 'disponível')
+
         self.old_message = None
-        
+
     def activate (self, shell):
-        obj = dbus.SessionBus ().get_object ('im.pidgin.purple.PurpleService', '/im/pidgin/purple/PurpleObject')
-        self.interface = dbus.Interface (obj, 'im.pidgin.purple.PurpleInterface')
-        
-        # TODO: salvar status de antes da ativação do plugin
-        old = self.interface.PurpleSavedstatusGetCurrent ()
-        self.old_message = self.interface.PurpleSavedstatusGetMessage (old).strip ()
-                
         player = shell.get_player ()
-        self.psc_id = player.connect ('playing-song-changed', self.playing_song_changed)
-        self.pc_id = player.connect ('playing-changed', self.playing_changed)
+        self.psc_id = player.connect ('playing-song-changed', self.playing_song_changed_cb)
+        self.pc_id = player.connect ('playing-changed', self.playing_changed_cb)
 
-        # Changing Pidgin status
-        title, album, artist, year = self.get_current_track_info (player)
-        message = '♫ ' + artist + ' - ' + title + ' ♫'
-        self.set_status_message (message)
+        if self.connect_to_messenger ():
+            # Changing Pidgin status
+            title, album, artist, year = self.get_current_track_info (player)
+            message = '♫ ' + artist + ' - ' + title + ' ♫'
+            self.set_status_message (message)
 
-    
-    def playing_changed (self, player, playing):
+    def connect_to_messenger (self):
+        try:
+            obj = dbus.SessionBus ().get_object ('im.pidgin.purple.PurpleService', '/im/pidgin/purple/PurpleObject')
+            self.interface = dbus.Interface (obj, 'im.pidgin.purple.PurpleInterface')
+
+            # Save current status message (before plugin activation)
+            old = self.interface.PurpleSavedstatusGetCurrent ()
+            self.old_message = self.interface.PurpleSavedstatusGetMessage (old).strip ()
+
+            return True
+
+        except Exception, msg:
+            print 'could not activate the IMStatus plugin!'
+            print msg
+
+            self.interface = None
+
+            return False
+
+
+    def playing_changed_cb (self, player, playing):
+        if not self.interface:
+            if not self.connect_to_messenger ():
+                return
+
         if playing:
             title, album, artist, year = self.get_current_track_info (player)
             message = '♫ ' + artist + ' - ' + title + ' ♫'
@@ -60,15 +77,18 @@ class IMStatus (rb.Plugin):
         else:
             self.set_status_message (self.old_message)
 
-    def playing_song_changed (self, player, entry):
+    def playing_song_changed_cb (self, player, entry):
+        if not self.interface:
+            if not self.connect_to_messenger ():
+                return
+
         # Get current track information
         title, album, artist, year = self.get_current_track_info (player)
-        
         message = '♫ ' + artist + ' - ' + title + ' ♫'
-        
+
         # Set status message
         self.set_status_message(message)
-        
+
     def set_status_message (self, message):
         if not message:
             message = ''
@@ -96,7 +116,13 @@ class IMStatus (rb.Plugin):
         year = str (db.entry_get (entry, rhythmdb.PROP_YEAR))
 
         return title, album, artist, year
-        
+
+    def on_messenger_status_changed_cb (self, *args):
+        # If the IM changes from 'offline' to 'available' display a new message
+        title, album, artist, year = self.get_current_track_info ()
+        message = '♫ ' + artist + ' - ' + title + ' ♫'
+        self.set_status_message (message)
+
  ## informações obtidas a partir da função help()
  #~ |      Signals from RBShellPlayer:
  #~ |    window-title-changed (gchararray)
