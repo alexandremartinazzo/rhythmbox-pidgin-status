@@ -36,7 +36,7 @@ class IMStatus (rb.Plugin):
 
     def activate (self, shell):
         player = shell.get_player ()
-        self.psc_id = player.connect ('playing-song-changed', self.playing_song_changed_cb)
+        #self.psc_id = player.connect ('playing-song-changed', self.playing_song_changed_cb)
         self.pc_id = player.connect ('playing-changed', self.playing_changed_cb)
 
         if self.connect_to_messenger ():
@@ -100,7 +100,7 @@ class IMStatus (rb.Plugin):
         # Change status only if available
         id = self.interface.PurplePrimitiveGetIdFromType (current)
         
-        if id in 'available':
+        if id in ['available', 'away']:
             # Create new transient status and activate it
             status = self.interface.PurpleSavedstatusNew ("", current)
             self.interface.PurpleSavedstatusSetMessage (status, message)
