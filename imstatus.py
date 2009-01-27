@@ -2,19 +2,19 @@
 # -*- coding: utf-8 -*-
 
 #~ imstatus.py
-#~ 
+#~
 #~ Copyright 2008 (C) Alexandre Antonino Gonçalves Martinazzo <alexandremartinazzo@gmail.com>
-#~ 
+#~
 #~ This program is free software; you can redistribute it and/or modify
 #~ it under the terms of the GNU General Public License as published by
 #~ the Free Software Foundation; either version 2 of the License, or
 #~ (at your option) any later version.
-#~ 
+#~
 #~ This program is distributed in the hope that it will be useful,
 #~ but WITHOUT ANY WARRANTY; without even the implied warranty of
 #~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #~ GNU General Public License for more details.
-#~ 
+#~
 #~ You should have received a copy of the GNU General Public License
 #~ along with this program; if not, write to the Free Software
 #~ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
@@ -39,7 +39,7 @@ class IMStatus (rb.Plugin):
         #self.psc_id = player.connect ('playing-song-changed', self.playing_song_changed_cb)
         self.pc_id = player.connect ('playing-changed', self.playing_changed_cb)
 
-        if self.connect_to_messenger ():
+        if self.connect_to_messenger () and player.get_playing ():
             # Changing Pidgin status
             title, album, artist, year = self.get_current_track_info (player)
             message = '♫ ' + artist + ' - ' + title + ' ♫'
@@ -96,10 +96,10 @@ class IMStatus (rb.Plugin):
         # Get current status type (Available/Away/etc.)
         current = self.interface.PurpleSavedstatusGetType \
                     (self.interface.PurpleSavedstatusGetCurrent () )
-        
+
         # Change status only if available
         id = self.interface.PurplePrimitiveGetIdFromType (current)
-        
+
         if id in ['available', 'away']:
             # Create new transient status and activate it
             status = self.interface.PurpleSavedstatusNew ("", current)
@@ -132,7 +132,7 @@ class IMStatus (rb.Plugin):
  #~ |    playing-song-changed (RhythmDBEntry)
  #~ |    playing-uri-changed (gchararray)
  #~ |    playing-song-property-changed (gchararray, gchararray, GValue, GValue)
- #~ 
+ #~
  #~ |  Properties from RBShellPlayer:
  #~ |    source -> RBSource: RBSource
  #~ |      RBSource object
@@ -158,17 +158,22 @@ class IMStatus (rb.Plugin):
  #~ |      Whether playing from the play queue or not
  #~ |    player -> GObject: RBPlayer
  #~ |      RBPlayer object
- 
+
     def deactivate(self, shell):
         # Restore the old message
-        self.set_status_message (self.old_message)
+        try:
+            self.set_status_message (self.old_message)
+        except: pass
 
         player = shell.get_player()
-        player.disconnect(self.psc_id)
-        player.disconnect(self.pc_id)
-        
-        del self.psc_id
-        del self.pc_id
-        
-        del self.interface
+
+        try:
+            player.disconnect(self.psc_id)
+            player.disconnect(self.pc_id)
+            del self.psc_id
+            del self.pc_id
+            del self.interface
+
+        except AttributeError:
+            pass
 
